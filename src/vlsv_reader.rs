@@ -1411,7 +1411,6 @@ pub mod mod_vlsv_reader {
                     }
                 }
 
-                #[cfg(not(no_octree))]
                 CompressionMethod::OCTREE => {
                     use std::os::raw::c_uchar;
                     #[link(name = "toctree_compressor")]
@@ -1714,8 +1713,6 @@ pub mod mod_vlsv_reader {
                 CompressionMethod::MLP | CompressionMethod::MLPMULTI => {
                     panic!("Compiled without MLP support")
                 }
-                #[cfg(no_octree)]
-                CompressionMethod::OCTREE => panic!("Compiled without OCTREE support"),
                 #[cfg(not(feature = "zfp"))]
                 CompressionMethod::ZFP => panic!("Compiled without ZFP support"),
             }
@@ -1928,7 +1925,6 @@ pub mod mod_vlsv_reader {
                     Some(vdf)
                 }
                 //No blockids here
-                #[cfg(not(no_octree))]
                 CompressionMethod::OCTREE => {
                     use core::ffi::{c_float, c_ulonglong};
                     use std::os::raw::c_uchar;
@@ -2224,10 +2220,6 @@ pub mod mod_vlsv_reader {
                 #[cfg(no_nn)]
                 CompressionMethod::MLP | CompressionMethod::MLPMULTI => {
                     panic!("Compiled without MLP support");
-                }
-                #[cfg(no_octree)]
-                CompressionMethod::OCTREE => {
-                    panic!("Compiled without OCTREE support");
                 }
                 #[cfg(not(feature = "zfp"))]
                 CompressionMethod::ZFP => {

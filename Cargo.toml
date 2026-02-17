@@ -9,6 +9,9 @@ description = "VLSV reader with C and Python bindings"
 keywords = ["vlasiator","vlsv","plasma","vdf","hpc"]
 categories = ["simulation","parsing","data-structures"]
 
+[build-dependencies]
+cmake = "0.1"
+
 [dependencies]
 bytemuck = { version = "1.25", features = ["derive"] }
 indicatif = "0.17"
