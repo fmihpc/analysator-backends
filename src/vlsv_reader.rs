@@ -1629,15 +1629,10 @@ pub mod mod_vlsv_reader {
                         &mut cids_with_blocks,
                     );
 
-                    let target_mlp = cids_with_blocks
+                    let target_mlp: usize = mlp_cids
                         .iter()
-                        .find_map(|&cid| {
-                            mlp_cids
-                                .iter()
-                                .position(|cand_vec| cand_vec.contains(&(cid as u64)))
-                        })
-                        .unwrap();
-
+                        .position(|cand_vec| cand_vec.contains(&(cid as u64)))
+                        .expect("cid not found in any mlp");
                     let fourier_order =
                         self.read_scalar_parameter("FOURIER_ORDER").unwrap() as usize;
                     let mlp_arch_dset = TryInto::<VlsvDataset>::try_into(
@@ -2170,14 +2165,10 @@ pub mod mod_vlsv_reader {
                         &mut cids_with_blocks,
                     );
 
-                    let target_mlp = cids_with_blocks
+                    let target_mlp: usize = mlp_cids
                         .iter()
-                        .find_map(|&cid| {
-                            mlp_cids
-                                .iter()
-                                .position(|cand_vec| cand_vec.contains(&(cid as u64)))
-                        })
-                        .unwrap();
+                        .position(|cand_vec| cand_vec.contains(&(cid as u64)))
+                        .expect("cid not found in any mlp");
 
                     let fourier_order =
                         self.read_scalar_parameter("FOURIER_ORDER").unwrap() as usize;
