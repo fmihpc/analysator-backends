@@ -74,6 +74,7 @@ fn main() {
             gpu_cmd.args(&[
                 mlp_src.to_str().unwrap(),
                 "--std=c++20",
+                "-I/opt/rocm/include/hipblas",
                 "-DTINYAI_MEMORY_GB=4",
                 &format!("-I{}", include_path.display()),
                 "--shared",
@@ -81,6 +82,7 @@ fn main() {
                 ml_lib_path.to_str().unwrap(),
                 "-fPIC",
                 "-lhipblas",
+                "-DSKIP_HOSTBLAS",
                 "-lblas",
             ]);
             gpu_cmd.arg("-DNOPROFILE").arg("-x").arg("hip");
@@ -93,6 +95,13 @@ fn main() {
 
         if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_out_dir.display());
+        }
+        if cc == "nvcc" {
+            println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+            println!("cargo:rustc-link-lib=cudart");
+            println!("cargo:rustc-link-lib=cublas");
+        } else if cc == "hipcc" {
+            println!("cargo:rustc-link-lib=hipblas");
         }
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
         println!("cargo:rustc-link-lib=cudart");
