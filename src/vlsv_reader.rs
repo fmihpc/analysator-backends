@@ -1174,6 +1174,39 @@ pub mod mod_vlsv_reader {
             Some(ordered_var)
         }
 
+        fn get_blocks_per_cell_dataset(&self, pop: &str) -> Option<VlsvDataset> {
+            TryInto::<VlsvDataset>::try_into(
+                self.root()
+                    .blockspercell
+                    .as_ref()?
+                    .iter()
+                    .find(|v| v.name.as_deref() == Some(pop))?,
+            )
+            .ok()
+        }
+
+        fn get_cells_with_blocks_dataset(&self, pop: &str) -> Option<VlsvDataset> {
+            TryInto::<VlsvDataset>::try_into(
+                self.root()
+                    .cellswithblocks
+                    .as_ref()?
+                    .iter()
+                    .find(|v| v.name.as_deref() == Some(pop))?,
+            )
+            .ok()
+        }
+
+        fn get_block_variable_dataset(&self, pop: &str) -> Option<VlsvDataset> {
+            TryInto::<VlsvDataset>::try_into(
+                self.root()
+                    .blockvariable
+                    .as_ref()?
+                    .iter()
+                    .find(|v| v.name.as_deref() == Some(pop))?,
+            )
+            .ok()
+        }
+
         pub fn read_vdf_dict<T>(&self, cid: usize, pop: &str) -> Option<HashMap<usize, T>>
         where
             T: Pod
@@ -1188,33 +1221,9 @@ pub mod mod_vlsv_reader {
                 + std::cmp::PartialOrd
                 + std::fmt::Debug,
         {
-            let blockspercell = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockspercell
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let cellswithblocks = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .cellswithblocks
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let blockvariable = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockvariable
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
+            let blockspercell = self.get_blocks_per_cell_dataset(pop)?;
+            let cellswithblocks = self.get_cells_with_blocks_dataset(pop)?;
+            let blockvariable = self.get_block_variable_dataset(pop)?;
             let wid = self.get_wid(pop)?;
             let wid3 = wid.pow(3);
             let mut cids_with_blocks: Vec<usize> = vec![0; cellswithblocks.arraysize];
@@ -1732,55 +1741,14 @@ pub mod mod_vlsv_reader {
                 + std::cmp::PartialOrd
                 + std::fmt::Debug,
         {
-            let blockspercell = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockspercell
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let cellswithblocks = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .cellswithblocks
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let blockvariable = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockvariable
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let wid = self.get_wid(pop)?;
-            let wid3 = wid.pow(3);
-            let (nvx, nvy, nvz) = self.get_vspace_mesh_bbox(pop)?;
-            let (mx, my, mz) = (nvx / wid, nvy / wid, nvz / wid);
+            let blockspercell = self.get_blocks_per_cell_dataset(pop)?;
+            let cellswithblocks = self.get_cells_with_blocks_dataset(pop)?;
+            let blockvariable = self.get_block_variable_dataset(pop)?;
 
             let mut cids_with_blocks: Vec<usize> = vec![0; cellswithblocks.arraysize];
             let mut blocks_per_cell: Vec<u32> = vec![0; blockspercell.arraysize];
             self.read_variable_into::<usize>(None, Some(cellswithblocks), &mut cids_with_blocks);
             self.read_variable_into::<u32>(None, Some(blockspercell), &mut blocks_per_cell);
-            let index_res = cids_with_blocks.iter().position(|&v| v == cid);
-            let index = if let Some(v) = index_res {
-                v
-            } else {
-                println!("Available cids with blocks{:?}", cids_with_blocks);
-                panic!("CID DOES NOT CONTAINS VDF!");
-            };
-            let read_size = blocks_per_cell[index] as usize;
-            let start_block = blocks_per_cell[..index]
-                .iter()
-                .map(|&x| x as usize)
-                .sum::<usize>();
-
             fn slice_ds(ds: &VlsvDataset, elem_offset: usize, elem_count: usize) -> VlsvDataset {
                 let mut sub = ds.clone();
                 sub.offset = ds.offset + elem_offset * ds.vectorsize * ds.datasize;
@@ -1788,27 +1756,11 @@ pub mod mod_vlsv_reader {
                 sub
             }
 
-            let id2ijk = |id: usize| -> (usize, usize, usize) {
-                let plane = mx * my;
-                debug_assert!(id < plane * mz, "GID out of bounds");
-                let k = id / plane;
-                let rem = id % plane;
-                let j = rem / mx;
-                let i = rem % mx;
-                (i, j, k)
-            };
-
-            // Read block data (T)
-            let vsamples = read_size * wid3;
-            let mut blocks: Vec<T> = vec![];
-            let compression_used = &blockvariable
+            let compression_used = blockvariable
                 .compression
                 .clone()
                 .unwrap_or(CompressionMethod::NONE);
 
-            let sparse: T = self
-                .read_sparsity(pop, cid)
-                .unwrap_or(T::from(1e-16).unwrap());
             match compression_used {
                 CompressionMethod::HERMITE => {
                     let vdf_byte_size =
@@ -1841,7 +1793,9 @@ pub mod mod_vlsv_reader {
                     Some(hermite_state)
                 }
                 _ => {
-                    panic!("Only hermite supported");
+                    panic!(
+                        "This file is not using Hermite compression so the hermite state could not be read in!"
+                    );
                 }
             }
         }
@@ -1860,33 +1814,9 @@ pub mod mod_vlsv_reader {
                 + std::cmp::PartialOrd
                 + std::fmt::Debug,
         {
-            let blockspercell = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockspercell
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let cellswithblocks = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .cellswithblocks
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
-            let blockvariable = TryInto::<VlsvDataset>::try_into(
-                self.root()
-                    .blockvariable
-                    .as_ref()?
-                    .iter()
-                    .find(|v| v.name.as_deref() == Some(pop))?,
-            )
-            .ok()?;
-
+            let blockspercell = self.get_blocks_per_cell_dataset(pop)?;
+            let cellswithblocks = self.get_cells_with_blocks_dataset(pop)?;
+            let blockvariable = self.get_block_variable_dataset(pop)?;
             let wid = self.get_wid(pop)?;
             let wid3 = wid.pow(3);
             let (nvx, nvy, nvz) = self.get_vspace_mesh_bbox(pop)?;
@@ -4132,6 +4062,62 @@ pub mod mod_vlsv_tracing {
                     let fields = VlsvStaticField::new(filename, periodic);
                     pb.inc(1);
                     (t, fields)
+                })
+                .collect();
+
+            pb.finish_with_message("All files loaded.");
+            timeline.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            let ds = if let Some(first) = timeline.first() {
+                first.1.ds()
+            } else {
+                T::zero()
+            };
+            Self { timeline, ds }
+        }
+
+        pub fn new_partial(dir: &str, periodic: [bool; 3], tmin: T, tmax: T) -> Self {
+            use indicatif::{ProgressBar, ProgressStyle};
+            use rayon::prelude::*;
+            use std::fs;
+            let mut files: Vec<String> = fs::read_dir(dir)
+                .unwrap()
+                .filter_map(|entry| {
+                    let path = entry.unwrap().path();
+                    if path.extension().map(|e| e == "vlsv").unwrap_or(false) {
+                        Some(path.to_string_lossy().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            files.sort();
+
+            let num_files = files.len();
+            let num_threads = rayon::current_num_threads();
+            println!("Loading {num_files} VLSV files using {num_threads} threads...");
+
+            let pb = ProgressBar::new(num_files as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("##-"),
+            );
+
+            let mut timeline: Vec<(T, VlsvStaticField<T>)> = files
+                .par_iter()
+                .filter_map(|filename| {
+                    let f = VlsvFile::new(&filename).unwrap();
+                    let time = T::from(f.read_scalar_parameter("time").unwrap()).unwrap();
+                    if time < tmin || time > tmax {
+                        pb.inc(1);
+                        return None;
+                    }
+                    let fields = VlsvStaticField::new(filename, periodic);
+                    pb.inc(1);
+
+                    Some((time, fields))
                 })
                 .collect();
 
