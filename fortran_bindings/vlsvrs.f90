@@ -14,7 +14,25 @@ type, bind(C) :: Grid64
     type(c_ptr)       :: data
 end type Grid64
 
+type, bind(C) :: GenericGrid
+    integer(c_size_t) :: nx, ny, nz, nc, datasize
+    real(8)           :: xmin, ymin, zmin, xmax, ymax, zmax
+    type(c_ptr)       :: data
+end type GenericGrid
+
 interface
+    type(GenericGrid) function read_vdf(filename, population, cid) bind(C, name = "read_vdf")
+        import :: GenericGrid, c_char, c_size_t
+        character(len=1, kind=C_char), dimension(*), intent(in) :: filename, population
+        integer(c_size_t), value, intent(in) :: cid
+    end function read_vdf
+    
+    type(GenericGrid) function read_var(filename, varname, op) bind(C, name = "read_var")
+        import :: GenericGrid, c_char, c_int
+        character(len=1, kind=C_char), dimension(*), intent(in) :: filename, varname
+        integer(c_int), value, intent(in) :: op
+    end function read_var
+    
     type(Grid32) function read_var_32(filename, varname, op) bind(C, name = "read_var_32")
         import :: Grid32, c_char, c_int
         character(len=1, kind=C_char), dimension(*), intent(in) :: filename, varname
