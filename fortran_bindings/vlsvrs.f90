@@ -15,9 +15,10 @@ type, bind(C) :: Grid64
 end type Grid64
 
 type, bind(C) :: GenericGrid
-    integer(c_size_t) :: nx, ny, nz, nc, datasize
+    integer(c_size_t) :: nx, ny, nz, nc
     real(8)           :: xmin, ymin, zmin, xmax, ymax, zmax
     type(c_ptr)       :: data
+    integer(c_size_t) :: datasize
 end type GenericGrid
 
 interface
