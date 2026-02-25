@@ -3,5 +3,6 @@ rust/*lock
 rust/__pycache__/
 rust/fortran_bindings/*.mod
 rust/fortran_bindings/*.o
+rust/fortran_bindings/external
 
 
