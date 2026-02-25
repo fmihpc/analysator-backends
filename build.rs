@@ -3,14 +3,14 @@ use std::process::Command;
 use std::{env, path::PathBuf};
 
 fn main() {
-    let zfp_dst = cmake::Config::new("external/zfp")
+    let zfp_dst = cmake::Config::new("rust/external/zfp")
         .define("BUILD_SHARED_LIBS", "OFF")
         .build();
-    let eigen_dst = cmake::Config::new("external/eigen")
+    let eigen_dst = cmake::Config::new("rust/external/eigen")
         .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
         .build();
 
-    let octree_src = Path::new("external/tucker-octree");
+    let octree_src = Path::new("rust/external/tucker-octree");
     let cpp_file = octree_src.join("toctree.cpp");
     let mut octree_compiled = false;
 
@@ -51,7 +51,7 @@ fn main() {
     }
 
     let mut ml_compiled = false;
-    let asterix_dir = Path::new("external/asterix");
+    let asterix_dir = Path::new("rust/external/asterix");
     let mlp_src = asterix_dir.join("src/vdf_compressor_nn.cu");
     let include_path = asterix_dir.join("include");
 
@@ -129,7 +129,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-env-changed=MLP_COMPRESSION_DIR");
-    println!("cargo:rerun-if-changed=external/tucker-octree/toctree.cpp");
+    println!("cargo:rerun-if-changed=rust/external/tucker-octree/toctree.cpp");
 
     let ml_msg = if ml_compiled { "OK" } else { "FAILED (no_nn)" };
     let octree_msg = if octree_compiled {
