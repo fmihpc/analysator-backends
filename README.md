@@ -1,3 +1,4 @@
+[![Release to TestPyPI](https://github.com/kstppd/vlsvrs/actions/workflows/release.yml/badge.svg?branch=analysator)](https://github.com/kstppd/vlsvrs/actions/workflows/release.yml)
 # VLSVRS
 
 Motivation:
