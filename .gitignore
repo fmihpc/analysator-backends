@@ -1,18 +1,9 @@
-/target
-*png
-*.ptr
-*lock
-__pycache__/
-assets/
-bin
-plot.py
-plotvdfs.py
-vdf.npy
-vdf_extract.py
-vg.npy
-fortran_bindings/*.mod
-fortran_bindings/*.o
-external/*
-external/
+rust/target
+rust/*lock
+rust/__pycache__/
+rust/fortran_bindings/*.mod
+rust/fortran_bindings/*.o
+# rust/external/*
+# rust/external/
 
 
