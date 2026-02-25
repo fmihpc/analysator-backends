@@ -5,7 +5,7 @@ build-backend = "maturin"
 
 [project]
 name = "vlsvrs"
-version = "0.9.8" 
+version = "0.9.9" 
 description = "VLSV file format reader and toolkit (Rust core with Python bindings)"
 readme = "README.md"
 requires-python = ">=3.8"
