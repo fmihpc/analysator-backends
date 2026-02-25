@@ -1,5 +1,5 @@
-[submodule "rust/external/octree"]
-	path = rust/external/octree
+[submodule "rust/external/tucker-octree"]
+	path = rust/external/tucker-octree
 	url = https://github.com/cschpc/tucker-octree.git
 [submodule "rust/external/asterix"]
 	path = rust/external/asterix
