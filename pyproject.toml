@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 
 [project]
-name = "analysator-backends"
+name = "analysator_backends"
 version = "0.9.9" 
 description = "Analysator Backends"
 readme = "README.md"
@@ -25,5 +25,5 @@ bindings = "pyo3"
 no-default-features = true
 features = ["with_bindings"]
 profile = "release"
-module-name = "analysator-backends"
+module-name = "analysator_backends"
 include = ["cpphelpers.so"]
