@@ -16,7 +16,6 @@ exclude = [
 cmake = "0.1"
 
 [dependencies]
-rustc-hash = "2.1.0"
 bytemuck = { version = "1.25", features = ["derive"] }
 libc = "0.2.180"
 memmap2 = "0.9.9"
