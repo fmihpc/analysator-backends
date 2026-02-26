@@ -55,7 +55,7 @@ fn main() {
     let mlp_src = asterix_dir.join("src/vdf_compressor_nn.cu");
     let include_path = asterix_dir.join("include");
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("PROJECT_SOURCE_DIR").unwrap());
     let ml_lib_name = "vlasiator_vdf_compressor_nn";
     let ml_lib_path = out_dir.join(format!("lib{}.so", ml_lib_name));
 
