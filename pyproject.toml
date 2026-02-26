@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 
 [project]
-name = "analysator_backends"
-version = "0.9.9" 
+name = "vlsvrs"
+version = "0.9.1" 
 description = "Analysator Backends"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -25,5 +25,5 @@ bindings = "pyo3"
 no-default-features = true
 features = ["with_bindings"]
 profile = "release"
-module-name = "analysator_backends"
+module-name = "vlsvrs"
 include = ["cpphelpers.so"]
