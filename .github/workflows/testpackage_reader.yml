@@ -32,12 +32,14 @@ jobs:
           uv pip install git+https://github.com/fmihpc/analysator.git
     - name: Import test
       run: |
+          module load GCC/11.3.0
           . CI_env/bin/activate
           python -c "import vlsvrs"
           python -c "import cpphelpers"
           python -c "import analysator"
     - name: Run testpackage
       run: |
+          module load GCC/11.3.0
           . CI_env/bin/activate
           python ./testpackage/testpackage_vlsvread.py
 
