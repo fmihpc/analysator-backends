@@ -20,8 +20,6 @@ jobs:
         submodules: 'recursive'
     - name: Install python and uv
       uses: astral-sh/setup-uv@v6
-      with:
-          python-version: "3.10.4" 
     - name: Install packages
       run: |
           module load GCCcore/11.3.0
