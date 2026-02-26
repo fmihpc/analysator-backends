@@ -21,9 +21,10 @@ jobs:
     - name: Install python and uv
       uses: astral-sh/setup-uv@v6
       with:
-          python-version: "3.9"
+          python-version: "3.10.4" 
     - name: Install packages
       run: |
+          module load GCCcore-11.3.0
           uv venv CI_env
           . CI_env/bin/activate
           uv pip install ../analysator-backends
