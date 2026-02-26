@@ -25,5 +25,5 @@ bindings = "pyo3"
 no-default-features = true
 features = ["with_bindings"]
 profile = "release"
-module-name = "vlsvrs"
+module-name = "analysator-backends"
 include = ["cpphelpers.so"]
