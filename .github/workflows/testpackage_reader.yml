@@ -30,8 +30,13 @@ jobs:
           uv pip install git+https://github.com/fmihpc/analysator.git
     - name: Import test
       run: |
+          . CI_env/bin/activate
           python -c "import vlsvrs"
           python -c "import cpphelpers"
           python -c "import analysator"
+    - name: Run testpackage for read
+      run: |
+          . CI_env/bin/activate
+          
 
 
