@@ -37,6 +37,7 @@ jobs:
     - name: Run testpackage for read
       run: |
           . CI_env/bin/activate
-          
+          python ./testpackage/testpackage_vlsvread.py
+
 
 
