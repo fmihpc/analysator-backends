@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.10)
+project(cpphelpers)
+
+# Find Python interpreter + development headers + extension suffix
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+
+# Build the extension module
+add_library(cpphelpers SHARED src/cpphelpers.cpp)
+
+# Link Python
+target_link_libraries(cpphelpers PRIVATE Python3::Module)
+
+execute_process(COMMAND python -m site --user-site
+    OUTPUT_VARIABLE PYTHON_USER_SITE
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+# Ensure correct naming (no "lib" prefix, correct .so/.pyd suffix)
+set_target_properties(cpphelpers PROPERTIES
+    PREFIX ""                                  # remove "lib"
+    SUFFIX ".so"       # e.g. .so, .pyd
+)
+install(TARGETS cpphelpers LIBRARY DESTINATION ${PROJECT_SOURCE_DIR}/../)
