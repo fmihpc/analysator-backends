@@ -8,10 +8,9 @@ import pickle
 datalocation = "/turso/group/spacephysics/analysator/CI/analysator-test-data/vlasiator/"
 files=["3D/FID/bulk1/bulk1.0000995.vlsv",
        "3D/FHA/bulk1/bulk1.0000990.vlsv",
-       "2D/BCQ/bulk/bulk.002002.vlsv",
+       "2D/BCQ/bulk/bulk.0002002.vlsv",
        "2D/ABC/bulk.0001003.vlsv"
 ]
-# "2D/BCQ/bulk/bulk.0002002.vlsv",
 # filename='/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv'
 # filename='/home/siclasse/bulk.0000110.vlsv'
 class Tester:
@@ -27,9 +26,12 @@ class Tester:
     def dumpPickle(self,file):
         pickle.dump(self.hashes_dict,file)
 
-    def load(self,obj=None):
-        self.vlsvobj_rust=vlsvrs.VlsvFile(self.filename)
-        self.vlsvobj_python=pt.vlsvfile.VlsvReader(self.filename)
+    def load(self,backend=None):
+        if not backend:
+            self.vlsvobj_rust=vlsvrs.VlsvFile(self.filename)
+            self.vlsvobj_python=pt.vlsvfile.VlsvReader(self.filename)
+        else:
+            self.setHashTarget(backend)
     def setHashTarget(self,backend):
         if backend=='rust':
             self.vlsvobj=self.vlsvobj_rust
@@ -37,20 +39,7 @@ class Tester:
             self.vlsvobj=self.vlsvobj_python
         else:
             print("None set, give valid backend")
-    # def readvlsvrs(self,override=False):
-    #     if not self.vlsvobj or override:
-    #         self.vlsvobj=vlsvrs.VlsvFile(self.filename)
-    #     else:
-    #         print("Vlsv already read via vlsvrs or vlsv.")
-    #     return 0
-    #
-    # def readvlsv(self,override=False):
-    #     if not self.vlsvobj or override:
-    #         self.vlsvobj=pt.vlsvfile.VlsvReader(self.filename)
-    #     else:
-    #         print("Vlsv already read via vlsvrs or vlsv.")
-    #     return 0
-    #
+
     def hash(self,func,args,op=None,opargs=None,both=False):
         
         def update(vlsvobj,op,opargs,args):
