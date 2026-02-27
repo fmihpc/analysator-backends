@@ -5,7 +5,7 @@ import os
 import hashlib
 
 datalocation = "/wrk-vakka/group/spacephysics/vlasiator"
-files=["2D/BCQ/bulk.0002002.vlsv","3D/FID/bulk1/bulk1.0000995.vlsv"]
+files=["2D/BCQ/bulk/bulk.0002002.vlsv","3D/FID/bulk1/bulk1.0000995.vlsv"]
 
 # filename='/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv'
 # filename='/home/siclasse/bulk.0000110.vlsv'
