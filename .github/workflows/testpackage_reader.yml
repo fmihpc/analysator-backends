@@ -1,0 +1,47 @@
+name: Testpackage turso 
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  testpackage:
+
+    runs-on: carrington
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Install python and uv
+      uses: astral-sh/setup-uv@v6
+    - name: Install packages
+      run: |
+          module load GCC/11.3.0
+          ml Python/3.10.4-GCCcore-11.3.0
+          export PY_VERSION="3.10.4"
+          uv venv -p 3.10.4 CI_env
+          . CI_env/bin/activate
+          uv pip install cmake
+          uv pip install ../analysator-backends
+          uv pip install git+https://github.com/fmihpc/analysator.git
+    - name: Import test
+      run: |
+          module load GCC/11.3.0
+          . CI_env/bin/activate
+          python -c "import vlsvrs"
+          python -c "import cpphelpers"
+          python -c "import analysator"
+    - name: Run testpackage
+      run: |
+          module load GCC/11.3.0
+          . CI_env/bin/activate
+          python ./testpackage/testpackage_vlsvread.py
+
+
+

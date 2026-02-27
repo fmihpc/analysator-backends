@@ -588,6 +588,15 @@ pub mod mod_vlsv_reader {
                             *out = i32::from_le_bytes(src.try_into().unwrap()) as f32;
                         });
                 }
+                (DataType::Uint, 8, DataType::Float, 8) => {
+                    let dst_f64: &mut [f64] = bytemuck::cast_slice_mut(dst);
+                    src_bytes
+                        .chunks_exact(8)
+                        .zip(dst_f64)
+                        .for_each(|(src, out)| {
+                            *out = i64::from_le_bytes(src.try_into().unwrap()) as f64;
+                        });
+                }
                 _ => panic!(
                     "Incompatible read: {type_on_disk:?}({size_on_disk}) => {type_of_t:?}({size_of_t})"
                 ),
@@ -4042,6 +4051,10 @@ pub mod mod_vlsv_py_exports {
 
         fn __repr__(&self) -> String {
             format!("VlsvFile(filename='{}')", self.inner.filename)
+        }
+
+        fn get_filename(&self) -> String {
+            format!("{}",self.inner.filename)
         }
 
         fn list_variables(&self) -> Vec<String> {
