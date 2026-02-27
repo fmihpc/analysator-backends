@@ -3,10 +3,11 @@ import numpy as np
 import vlsvrs
 import os
 import hashlib
+import pickle
 
 datalocation = "/wrk-vakka/group/spacephysics/vlasiator"
-files=["2D/BCQ/bulk/bulk.0002002.vlsv","3D/FID/bulk1/bulk1.0000995.vlsv"]
-
+files=["3D/FID/bulk1/bulk1.0000995.vlsv"]
+# "2D/BCQ/bulk/bulk.0002002.vlsv",
 # filename='/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv'
 # filename='/home/siclasse/bulk.0000110.vlsv'
 class Tester:
@@ -16,6 +17,11 @@ class Tester:
         self.hashes_dict={}
     def changeFile(self,filename):
         self.filename=filename
+    def loadPickle(self,file):
+        self.pickled = pickle.load(file)
+    def dumpPickle(self,file):
+        pickle.dump(self.hashes_dict,file)
+
     def load(self):
         self.vlsvobj_rust=vlsvrs.VlsvFile(self.filename)
         self.vlsvobj_python=pt.vlsvfile.VlsvReader(self.filename)
