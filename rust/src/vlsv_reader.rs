@@ -4079,8 +4079,7 @@ pub mod mod_vlsv_py_exports {
             &self,
             py: Python<'py>,
             variable: &str,
-            cid: Vec<usize>,
-            mut hint: PyReadwriteArray1<'_, usize>,
+            cid: Vec<usize>, mut hint: numpy::borrow::PyReadwriteArray1<'_, usize>,
         ) -> PyResult<PyObject> {
             let ds = self.inner.get_dataset(variable).ok_or_else(|| {
                 PyValueError::new_err(format!("Variable '{}' not found", variable))
