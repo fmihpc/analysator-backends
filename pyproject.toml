@@ -5,7 +5,7 @@ build-backend = "maturin"
 
 [project]
 name = "vlsvrs"
-version = "0.9.1" 
+version = "0.9.9" 
 description = "Analysator Backends"
 readme = "README.md"
 requires-python = ">=3.8"
