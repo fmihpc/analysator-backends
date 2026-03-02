@@ -4,6 +4,7 @@ import vlsvrs
 import os
 import hashlib
 import pickle
+import importlib
 
 datalocation = "/turso/group/spacephysics/analysator/CI/analysator-test-data/vlasiator/"
 files=["3D/FID/bulk1/bulk1.0000995.vlsv",
@@ -11,8 +12,6 @@ files=["3D/FID/bulk1/bulk1.0000995.vlsv",
        "2D/BCQ/bulk/bulk.0002002.vlsv",
        "2D/ABC/bulk.0001003.vlsv"
 ]
-# filename='/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv'
-# filename='/home/siclasse/bulk.0000110.vlsv'
 class Tester:
     def __init__(self,filename=None):
         self.filename=filename
@@ -27,11 +26,11 @@ class Tester:
         pickle.dump(self.hashes_dict,file)
 
     def load(self,backend=None):
-        if not backend:
+        if not backend or backend.lower()=="rust":
             self.vlsvobj_rust=vlsvrs.VlsvFile(self.filename)
+        if not backend or backend.lower()=="python":
             self.vlsvobj_python=pt.vlsvfile.VlsvReader(self.filename)
-        else:
-            self.setHashTarget(backend)
+
     def setHashTarget(self,backend):
         if backend=='rust':
             self.vlsvobj=self.vlsvobj_rust
@@ -40,53 +39,82 @@ class Tester:
         else:
             print("None set, give valid backend")
 
-    def hash(self,func,args,op=None,opargs=None,both=False):
-        
-        def update(vlsvobj,op,opargs,args):
-            try:
-                t=getattr(vlsvobj,func)
-                if type(args) is dict:
-                    retval=t(**args)
-                elif type(args) is list:
-                    retval=t(*args)
-                if op and opargs:
-                    if type(op) is not list:
-                       op=[op]
-                       opargs=[opargs]
-                    if type(op) is list:
-                        for i,f in enumerate(op):
-                            try:
-                                fun=getattr(retval,f)
-                            except AttributeError:
-                                try: 
-                                    if '.' in f:
-                                        funcl=f.split('.')
-                                        if type(funcl[0]) is str:
-                                            import importlib
-                                            funcl[0]=importlib.import_module(funcl[0])
-                                        fun=getattr(funcl[0],funcl[1])
-                                    else:
-                                        fun=f
-                                    opargs[i]=[retval]
-                                except AttributeError as e:
-                                    raise AttributeError(f"Did not find func {func} to operate with: {e}")
-                            retval=fun(*opargs[i])
-            except Exception as e:
-                raise e
-            if func not in self.hashes_dict_rust.keys():
-                self.hashes_dict_rust[func]={}
-            elif func not in self.hashes_dict_python.keys():
-                self.hashes_dict_python[func]={}
-            try:
-                self.hashes_dict_rust[func][vlsvobj.get_filename()]=hashlib.sha256(np.array(retval).tobytes()).hexdigest()
-            except AttributeError:
-                self.hashes_dict_python[func][vlsvobj.file_name]=hashlib.sha256(np.array(retval).tobytes()).hexdigest()
+    def hash(self,func,args,op=None,opargs=None,both=False,loop=False,flatten=True,sort=True):
+            
 
+        def update(vlsvobj,op,opargs,args,loop=False):
+            
+
+            #If we want to repeat same function func with different arguments
+            if loop:
+                for arg in args:
+                    update(vlsvobj,op,opargs,arg)
+                return 0
+            argkey=str(args)
+            opsname="_"+str(op)+"_"+str(opargs)
+            #Get the method of the vlsvobj that matches the given func str
+            t=getattr(vlsvobj,func)
+            #Handle arguments and call the function with the given args to get return value
+            if type(args) is dict:
+                retval=t(**args)
+            elif type(args) is list:
+                retval=t(*args)
+            
+            #If we want to do operations on the retval for example reshaping, type chaning or sorting
+            if op and opargs:
+                #Make into list for handling
+                if type(op) is not list:
+                    op=[op]
+                    opargs=[opargs]
+
+                for i,f in enumerate(op):
+                    try:
+                        fun=getattr(retval,f)
+                    except AttributeError:
+                        try: 
+                            #if given function is not method of retval we make retval the argument of function
+                            if '.' in f:
+                                funcl=f.split('.')
+                                #in case it is inside a module like numpy we need to get instance of the module
+                                funcl[0]=importlib.import_module(funcl[0])
+
+                                fun=getattr(funcl[0],funcl[1])
+                            else:
+                                fun=f
+                            opargs[i]=[retval]
+                        except AttributeError as e:
+                            raise AttributeError(f"Did not find func {func} to operate with: {e}")
+                    retval=fun(*opargs[i])
+
+            #save hash of the retval as array
+            retval=np.array(retval)
+            print(retval.shape)
+            if flatten:
+                retval.reshape((-1,))
+            if sort:
+                retval.sort()
+            print(retval)
+            print(retval.shape)
+            print("end")
+
+            if self.vlsvobj==self.vlsvobj_rust:
+                if self.filename not in self.hashes_dict_rust.keys():
+                    self.hashes_dict_rust[self.filename]={}
+                    if func not in self.hashes_dict_rust:
+                        self.hashes_dict_rust[self.filename][func]={}
+                self.hashes_dict_rust[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
+            else:
+                if self.filename not in self.hashes_dict_python.keys():
+                    self.hashes_dict_python[self.filename]={}
+                    if func not in self.hashes_dict_python:
+                        self.hashes_dict_python[self.filename][func]={}
+                self.hashes_dict_python[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
+        
         if not both:
-            update(self.vlsvobj,op,opargs,args)
+            update(self.vlsvobj,op,opargs,args,loop)
         else:
-            update(self.vlsvobj_rust,op,opargs,args)
-            update(self.vlsvobj_python,op,opargs,args)
+            update(self.vlsvobj_rust,op,opargs,args,loop)
+            update(self.vlsvobj_python,op,opargs,args,loop)
 
     def compare(self,funcpy,argspy,funcrust,argsrust):
         try:
@@ -126,26 +154,31 @@ class Tester:
 # read_vdf_spares 
 # 
 ciTester = Tester()
+files=["s"]
 for file in files:
 
     #Load data 
     filename=os.path.join(datalocation,file)
 
-    #filename="/home/siclasse/bulk.0000110.vlsv"
+    filename="/home/siclasse/bulk.0000110.vlsv"
     #filename="/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv"
     ciTester.changeFile(filename)
     ciTester.load()
 
     #Test compare
     cid=ciTester.vlsvobj_python.get_cellid_with_vdf(np.array([0,0,0]))
-    ciTester.compare("read_velocity_cells",{"cellid":cid,"pop":"proton"},"read_vdf_sparse",{"cid":cid,"pop":"proton"})
+    #ciTester.compare("read_velocity_cells",{"cellid":cid,"pop":"proton"},"read_vdf_sparse",{"cid":cid,"pop":"proton"})
     
     
     #Make hash python
     ciTester.setHashTarget("rust")
-    ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]])
+    ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]],sort=False,flatten=False)
+
+    #Make hash python
     ciTester.setHashTarget("python")
-    ciTester.hash("read_variable",["CellID"])
+    ciTester.hash("read_variable",["CellID"],loop=False)
+    #ciTester.hash("read_variable",[["CellID"],["vg_rho"]],loop=True)
+     
 
 print(ciTester.hashes_dict_python)
 print(ciTester.hashes_dict_rust)
