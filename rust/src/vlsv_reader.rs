@@ -2344,6 +2344,7 @@ pub mod mod_vlsv_reader {
                 .collect::<Vec<usize>>()
         }
 
+        //Does not allocate for cellids and reads from memory map if alignemnt allows for it
         pub fn read_vg_variable_at_hinted<T>(
             &self,
             name: &str,
@@ -2353,6 +2354,7 @@ pub mod mod_vlsv_reader {
         where
             T: bytemuck::AnyBitPattern + Copy + Default,
         {
+            use std::borrow::Cow;
             let info = self.get_dataset(name)?;
             if info.grid.clone()? != VlasiatorGrid::SPATIALGRID {
                 panic!("This method only supports reading in VG variables");
@@ -2367,34 +2369,54 @@ pub mod mod_vlsv_reader {
             let cellid_ds = self
                 .get_dataset("CellID")
                 .expect("Failed to get CellID dataset");
-            let mut cell_ids = Vec::<u64>::with_capacity(cellid_ds.arraysize);
-            unsafe { cell_ids.set_len(cellid_ds.arraysize) };
-            self.read_variable_into::<u64>(None, Some(cellid_ds), &mut cell_ids);
-            let stride_bytes = info.datasize * info.vectorsize;
             let mmap = self.memorymap();
+
+            let cellid_start = cellid_ds.offset;
+            let cellid_end = cellid_start + (cellid_ds.arraysize * std::mem::size_of::<u64>());
+            let raw_cellid_bytes = &mmap[cellid_start..cellid_end];
+
+            let cell_ids: Cow<[u64]> =
+                if (raw_cellid_bytes.as_ptr() as usize) % std::mem::align_of::<u64>() == 0 {
+                    Cow::Borrowed(bytemuck::cast_slice(raw_cellid_bytes))
+                } else {
+                    let mut v = vec![0u64; cellid_ds.arraysize];
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            raw_cellid_bytes.as_ptr(),
+                            v.as_mut_ptr() as *mut u8,
+                            raw_cellid_bytes.len(),
+                        );
+                    }
+                    Cow::Owned(v)
+                };
+
+            let stride_bytes = info.datasize * info.vectorsize;
             let mut retval = Vec::with_capacity(cid.len());
             for (i, &target_cid) in cid.iter().enumerate() {
                 let target_u64 = target_cid as u64;
-                let mut idx = hint[i];
-                if idx >= cell_ids.len() || cell_ids[idx] != target_u64 {
-                    idx = cell_ids
-                        .iter()
-                        .position(|&x| x == target_u64)
-                        .unwrap_or_else(|| panic!("CellID {target_cid} not found"));
-                    hint[i] = idx;
-                }
+
+                let idx = find_near_with_hint(&cell_ids, target_u64, hint[i])
+                    .unwrap_or_else(|| panic!("CellID {target_cid} not found"));
+
+                hint[i] = idx;
 
                 let off = info.offset + idx * stride_bytes;
                 let raw_bytes = &mmap[off..off + stride_bytes];
-                let mut typed_data = vec![T::default(); info.vectorsize];
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        raw_bytes.as_ptr(),
-                        typed_data.as_mut_ptr() as *mut u8,
-                        stride_bytes,
-                    );
+
+                if (raw_bytes.as_ptr() as usize) % std::mem::align_of::<T>() == 0 {
+                    let typed_data: &[T] = bytemuck::cast_slice(raw_bytes);
+                    retval.push(typed_data.to_vec());
+                } else {
+                    let mut typed_data = vec![T::default(); info.vectorsize];
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            raw_bytes.as_ptr(),
+                            typed_data.as_mut_ptr() as *mut u8,
+                            stride_bytes,
+                        );
+                    }
+                    retval.push(typed_data);
                 }
-                retval.push(typed_data);
             }
             Some(retval)
         }
