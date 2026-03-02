@@ -38,7 +38,7 @@ There are 3 main parts here:
 pub mod mod_vlsv_reader {
     pub const VLSV_FOOTER_LOC_START: usize = 8;
     pub const VLSV_FOOTER_LOC_END: usize = 16;
-    use bytemuck::{Pod, Zeroable, cast_slice, pod_read_unaligned};
+    use bytemuck::{Pod, Zeroable, cast_slice};
     use core::convert::TryInto;
     use memmap2::Mmap;
     use ndarray::{Array4, ArrayView1};
@@ -2224,19 +2224,12 @@ pub mod mod_vlsv_reader {
             Some(vdf)
         }
 
-        pub fn read_sparsity<
-            T: Pod + Zero + Num + NumCast + std::iter::Sum + Default + TypeTag + std::cmp::PartialOrd,
-        >(
-            &self,
-            name: &str,
-            cid: usize,
-        ) -> Option<T> {
-            let v = self.read_vg_variable_at_as_ref_dyn::<T>(name, &[cid], &mut [0])?[0];
-            let mut k: f32 = f32::zero();
-            for chunk in v.chunks_exact(std::mem::size_of::<f32>()) {
-                k = pod_read_unaligned::<f32>(chunk);
-            }
-            T::from(k)
+        pub fn read_sparsity<T>(&self, name: &str, cid: usize) -> Option<T>
+        where
+            T: bytemuck::AnyBitPattern + Copy + Default,
+        {
+            let ret = self.read_vg_variable_at_hinted::<T>(name, &[cid], &mut [0])?;
+            ret.get(0).and_then(|v| v.get(0).copied())
         }
 
         pub fn read_variable<
@@ -2351,14 +2344,14 @@ pub mod mod_vlsv_reader {
                 .collect::<Vec<usize>>()
         }
 
-        pub fn read_vg_variable_at_as_ref_dyn<'a, T>(
-            &'a self,
+        pub fn read_vg_variable_at_hinted<T>(
+            &self,
             name: &str,
             cid: &[usize],
             hint: &mut [usize],
-        ) -> Option<Vec<&'a [u8]>>
+        ) -> Option<Vec<Vec<T>>>
         where
-            T: bytemuck::AnyBitPattern,
+            T: bytemuck::AnyBitPattern + Copy + Default,
         {
             let info = self.get_dataset(name)?;
             if info.grid.clone()? != VlasiatorGrid::SPATIALGRID {
@@ -2371,79 +2364,39 @@ pub mod mod_vlsv_reader {
                 "CIDs and hint must have the same length."
             );
 
-            if info.datasize != core::mem::size_of::<T>() {
-                panic!(
-                    "Size mismatch: dataset has datasize {}, function expects {}",
-                    info.datasize,
-                    core::mem::size_of::<T>()
-                );
-            }
-
-            let cellid_ds = self.get_dataset("CellID")?;
-            let cell_id_bytes = &self.memorymap()
-                [cellid_ds.offset..cellid_ds.offset + cellid_ds.datasize * cellid_ds.arraysize];
-            let cell_ids: &[u64] = bytemuck::try_cast_slice(cell_id_bytes)
-                .expect("CELLIDS misaligned or wrong length");
-
-            let mut indices = Vec::with_capacity(cid.len());
-            for (i, &c) in cid.iter().enumerate() {
-                let idx = find_near_with_hint(cell_ids, c as u64, hint[i])
-                    .unwrap_or_else(|| panic!("Failed to find cellid {c}"));
-                indices.push(idx);
-            }
-            hint.copy_from_slice(&indices);
+            let cellid_ds = self
+                .get_dataset("CellID")
+                .expect("Failed to get CellID dataset");
+            let mut cell_ids = Vec::<u64>::with_capacity(cellid_ds.arraysize);
+            unsafe { cell_ids.set_len(cellid_ds.arraysize) };
+            self.read_variable_into::<u64>(None, Some(cellid_ds), &mut cell_ids);
             let stride_bytes = info.datasize * info.vectorsize;
-            let mut retval = Vec::with_capacity(indices.len());
-            for idx in indices {
+            let mmap = self.memorymap();
+            let mut retval = Vec::with_capacity(cid.len());
+            for (i, &target_cid) in cid.iter().enumerate() {
+                let target_u64 = target_cid as u64;
+                let mut idx = hint[i];
+                if idx >= cell_ids.len() || cell_ids[idx] != target_u64 {
+                    idx = cell_ids
+                        .iter()
+                        .position(|&x| x == target_u64)
+                        .unwrap_or_else(|| panic!("CellID {target_cid} not found"));
+                    hint[i] = idx;
+                }
+
                 let off = info.offset + idx * stride_bytes;
-                retval.push(&self.memorymap()[off..off + stride_bytes]);
+                let raw_bytes = &mmap[off..off + stride_bytes];
+                let mut typed_data = vec![T::default(); info.vectorsize];
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        raw_bytes.as_ptr(),
+                        typed_data.as_mut_ptr() as *mut u8,
+                        stride_bytes,
+                    );
+                }
+                retval.push(typed_data);
             }
             Some(retval)
-        }
-
-        pub fn read_vg_variable_at_as_ref_const<'a, T, const N: usize>(
-            &'a self,
-            name: &str,
-            cid: &[usize; N],
-            hint: &mut [usize; N],
-        ) -> Option<[&'a [u8]; N]>
-        where
-            T: bytemuck::AnyBitPattern,
-        {
-            let info = self.get_dataset(name)?;
-            if info.grid.clone()? != VlasiatorGrid::SPATIALGRID {
-                panic!("This method only supports reading in VG variables");
-            }
-
-            if info.datasize != core::mem::size_of::<T>() {
-                panic!(
-                    "Size mismatch: dataset has datasize {}, function expects {}",
-                    info.datasize,
-                    core::mem::size_of::<T>()
-                );
-            }
-
-            let cellid_ds = self.get_dataset("CellID")?;
-            let cell_id_bytes = &self.memorymap()
-                [cellid_ds.offset..cellid_ds.offset + cellid_ds.datasize * cellid_ds.arraysize];
-            let cell_ids: &[u64] = bytemuck::try_cast_slice(cell_id_bytes)
-                .expect("CELLIDS misaligned or wrong length");
-
-            let indices: [usize; N] = core::array::from_fn(|i| {
-                let target = cid[i] as u64;
-                let h = hint[i];
-                find_near_with_hint(cell_ids, target, h)
-                    .unwrap_or_else(|| panic!("Failed to find cellid {target}"))
-            });
-
-            hint.copy_from_slice(&indices);
-            let stride_bytes = info.datasize * info.vectorsize;
-            let out: [&'a [u8]; N] = core::array::from_fn(|i| {
-                let idx = indices[i];
-                let off = info.offset + idx * stride_bytes;
-                &self.memorymap()[off..off + stride_bytes]
-            });
-            Some(out)
         }
     }
 
@@ -4121,6 +4074,48 @@ pub mod mod_vlsv_py_exports {
                 }
             }
         }
+
+        fn read_vg_variable_at_with_hint<'py>(
+            &self,
+            py: Python<'py>,
+            variable: &str,
+            cid: Vec<usize>,
+            mut hint: PyReadwriteArray1<'_, usize>,
+        ) -> PyResult<PyObject> {
+            let ds = self.inner.get_dataset(variable).ok_or_else(|| {
+                PyValueError::new_err(format!("Variable '{}' not found", variable))
+            })?;
+            let hint_slice = hint.as_slice_mut()?;
+            if cid.len() != hint_slice.len() {
+                return Err(PyValueError::new_err(
+                    "CID vector and Hint array must have the same length",
+                ));
+            }
+            match ds.datasize {
+                4 => {
+                    let vals: Vec<Vec<f32>> = self
+                        .inner
+                        .read_vg_variable_at_hinted::<f32>(variable, &cid, hint_slice)
+                        .ok_or_else(|| PyValueError::new_err("Failed to read f32 variable"))?;
+
+                    let flattened: Vec<f32> = vals.into_iter().flatten().collect();
+                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
+                }
+                8 => {
+                    let vals: Vec<Vec<f64>> = self
+                        .inner
+                        .read_vg_variable_at_hinted::<f64>(variable, &cid, hint_slice)
+                        .ok_or_else(|| PyValueError::new_err("Failed to read f64 variable"))?;
+
+                    let flattened: Vec<f64> = vals.into_iter().flatten().collect();
+                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
+                }
+                _ => {
+                    panic!("Type not recognized!")
+                }
+            }
+        }
+
         fn read_variable_f32<'py>(
             &self,
             py: Python<'py>,
