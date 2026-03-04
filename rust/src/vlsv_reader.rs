@@ -41,7 +41,7 @@ pub mod mod_vlsv_reader {
     use bytemuck::{Pod, Zeroable, cast_slice};
     use core::convert::TryInto;
     use memmap2::Mmap;
-    use ndarray::{Array4, ArrayView1};
+    use ndarray::{Array1, Array4, ArrayView1};
     use ndarray::{Axis, Order, s};
     use num_traits::{Float, FromPrimitive, Num, NumCast, ToPrimitive, Zero};
     use once_cell::sync::OnceCell;
@@ -2243,6 +2243,24 @@ pub mod mod_vlsv_reader {
                 .or_else(|| self.read_vg_variable_as_fg::<T>(name, op))
         }
 
+        pub fn read_variable_data<
+            T: Pod + Zero + Num + NumCast + std::iter::Sum + Default + TypeTag + std::cmp::PartialOrd,
+        >(
+            &self,
+            name: &str,
+            _op: Option<i32>,
+        ) -> Option<ndarray::Array1<T>> {
+            let info = self.get_dataset(name)?;
+            let total_elems = info.arraysize * info.vectorsize;
+            let mut data: Array1<T> = Array1::<T>::zeros(total_elems);
+            self.read_variable_into::<T>(
+                None,
+                Some(info),
+                data.as_slice_mut().expect("Could not get array slice"),
+            );
+            Some(data)
+        }
+
         pub fn read_variable_zoom<
             T: Pod + Zero + Num + NumCast + std::iter::Sum + Default + TypeTag + std::cmp::PartialOrd,
         >(
@@ -3962,19 +3980,51 @@ pub mod mod_vlsv_c_exports {
     }
 }
 
+//********************* Python Bindings **************************
 #[cfg(feature = "with_bindings")]
 pub mod mod_vlsv_py_exports {
-
     use super::mod_vlsv_reader::*;
-    use bytemuck::pod_read_unaligned;
-    use ndarray::Array2;
+    use crate::mod_vlsv_reader::DataType;
     use ndarray::Array4;
-    use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray4};
+    use numpy::PyReadwriteArray1;
+    use numpy::{IntoPyArray, PyArray1, PyArray4};
     use pyfunction;
     use pyo3::exceptions::{PyIOError, PyValueError};
     use pyo3::prelude::*;
     use pyo3::wrap_pyfunction;
-    //********************* Python Bindings **************************
+
+    //Nested macro hack to clean up the python readers
+    macro_rules! dispatch_read {
+        ($self:ident, $py:ident, $variable:ident, $op:ident, $read_fn:ident) => {{
+            let ds = $self
+                .inner
+                .get_dataset($variable)
+                .expect("Variable not found");
+            let err_msg = format!("variable '{}' not found", $variable);
+
+            macro_rules! doread {
+                ($t:ty) => {{
+                    let res = $self.inner.$read_fn::<$t>($variable, $op);
+                    let arr = map_opt(res, err_msg)?;
+                    Ok(arr.into_pyarray($py).to_owned().into())
+                }};
+            }
+
+            match (ds.datatype, ds.datasize) {
+                (DataType::Float, 4) => doread!(f32),
+                (DataType::Float, 8) => doread!(f64),
+                (DataType::Int, 4) => doread!(i32),
+                (DataType::Int, 8) => doread!(i64),
+                (DataType::Uint, 4) => doread!(u32),
+                (DataType::Uint, 8) => doread!(u64),
+                (DataType::U8, _) => doread!(u8),
+                _ => panic!(
+                    "Type not recognized: {:?} with size {}",
+                    ds.datatype, ds.datasize
+                ),
+            }
+        }};
+    }
 
     fn map_opt<T, E>(o: Option<T>, msg: E) -> PyResult<T>
     where
@@ -4072,70 +4122,11 @@ pub mod mod_vlsv_py_exports {
             variable: &str,
             op: Option<i32>,
         ) -> PyResult<PyObject> {
-            let ds = self
-                .inner
-                .get_dataset(variable)
-                .expect("Variable not found");
-            match ds.datasize {
-                4 => {
-                    let arr: Array4<f32> = map_opt(
-                        self.inner.read_variable::<f32>(variable, op),
-                        format!("variable '{}' not found", variable),
-                    )?;
-                    Ok(arr.into_pyarray(py).to_owned().into())
-                }
-                8 => {
-                    let arr: Array4<f64> = map_opt(
-                        self.inner.read_variable::<f64>(variable, op),
-                        format!("variable '{}' not found", variable),
-                    )?;
-                    Ok(arr.into_pyarray(py).to_owned().into())
-                }
-                _ => {
-                    panic!("Type not recognized!")
-                }
-            }
+            dispatch_read!(self, py, variable, op, read_variable)
         }
 
-        fn read_vg_variable_at_with_hint<'py>(
-            &self,
-            py: Python<'py>,
-            variable: &str,
-            cid: Vec<usize>,
-            mut hint: PyReadwriteArray1<'_, usize>,
-        ) -> PyResult<PyObject> {
-            let ds = self.inner.get_dataset(variable).ok_or_else(|| {
-                PyValueError::new_err(format!("Variable '{}' not found", variable))
-            })?;
-            let hint_slice = hint.as_slice_mut()?;
-            if cid.len() != hint_slice.len() {
-                return Err(PyValueError::new_err(
-                    "CID vector and Hint array must have the same length",
-                ));
-            }
-            match ds.datasize {
-                4 => {
-                    let vals: Vec<Vec<f32>> = self
-                        .inner
-                        .read_vg_variable_at_hinted::<f32>(variable, &cid, hint_slice)
-                        .ok_or_else(|| PyValueError::new_err("Failed to read f32 variable"))?;
-
-                    let flattened: Vec<f32> = vals.into_iter().flatten().collect();
-                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
-                }
-                8 => {
-                    let vals: Vec<Vec<f64>> = self
-                        .inner
-                        .read_vg_variable_at_hinted::<f64>(variable, &cid, hint_slice)
-                        .ok_or_else(|| PyValueError::new_err("Failed to read f64 variable"))?;
-
-                    let flattened: Vec<f64> = vals.into_iter().flatten().collect();
-                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
-                }
-                _ => {
-                    panic!("Type not recognized!")
-                }
-            }
+        fn read_variable_raw<'py>(&self, py: Python<'py>, variable: &str) -> PyResult<PyObject> {
+            dispatch_read!(self, py, variable, None, read_variable_data)
         }
 
         fn read_variable_f32<'py>(
@@ -4198,6 +4189,47 @@ pub mod mod_vlsv_py_exports {
                             ))
                         })?;
                     Ok(PyArray1::from_vec(py, vals).to_owned().into())
+                }
+                _ => {
+                    panic!("Type not recognized!")
+                }
+            }
+        }
+
+        fn read_vg_variable_at_with_hint<'py>(
+            &self,
+            py: Python<'py>,
+            variable: &str,
+            cid: Vec<usize>,
+            mut hint: PyReadwriteArray1<'_, usize>,
+        ) -> PyResult<PyObject> {
+            let ds = self.inner.get_dataset(variable).ok_or_else(|| {
+                PyValueError::new_err(format!("Variable '{}' not found", variable))
+            })?;
+            let hint_slice = hint.as_slice_mut()?;
+            if cid.len() != hint_slice.len() {
+                return Err(PyValueError::new_err(
+                    "CID vector and Hint array must have the same length",
+                ));
+            }
+            match ds.datasize {
+                4 => {
+                    let vals: Vec<Vec<f32>> = self
+                        .inner
+                        .read_vg_variable_at_hinted::<f32>(variable, &cid, hint_slice)
+                        .ok_or_else(|| PyValueError::new_err("Failed to read f32 variable"))?;
+
+                    let flattened: Vec<f32> = vals.into_iter().flatten().collect();
+                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
+                }
+                8 => {
+                    let vals: Vec<Vec<f64>> = self
+                        .inner
+                        .read_vg_variable_at_hinted::<f64>(variable, &cid, hint_slice)
+                        .ok_or_else(|| PyValueError::new_err("Failed to read f64 variable"))?;
+
+                    let flattened: Vec<f64> = vals.into_iter().flatten().collect();
+                    Ok(PyArray1::from_vec(py, flattened).to_owned().into())
                 }
                 _ => {
                     panic!("Type not recognized!")
