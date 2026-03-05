@@ -55,11 +55,12 @@ class Tester:
             #Get the method of the vlsvobj that matches the given func str
             t=getattr(vlsvobj,func)
             #Handle arguments and call the function with the given args to get return value
+            
             if type(args) is dict:
                 retval=t(**args)
             elif type(args) is list:
                 retval=t(*args)
-            
+
             #If we want to do operations on the retval for example reshaping, type chaning or sorting
             if op and opargs:
                 #Make into list for handling
@@ -172,15 +173,32 @@ for file in files:
     
     #Make hash python
     ciTester.setHashTarget("rust")
-    ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]],sort=False,flatten=False)
+    #ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]],sort=False,flatten=False)
+    variables_to_test=["CellID","vg_rhom","fg_b","vg_v","fg_rhom","fg_b_vol","vg_rhoq","fg_e","proton/vg_rho","proton/vg_v"]
+    pylist=ciTester.vlsvobj_python.get_variables()
+    rustlist=ciTester.vlsvobj_rust.list_variables()
+    variables=[[var] for var in variables_to_test if (var in pylist and var in rustlist)]
+    ciTester.hash("read_variable_raw",variables,loop=True,op=["reshape"],opargs=[[-1]])
 
     #Make hash python
     ciTester.setHashTarget("python")
-    ciTester.hash("read_variable",["CellID"],loop=False)
-    #ciTester.hash("read_variable",[["CellID"],["vg_rho"]],loop=True)
+    ciTester.hash("read_variable",variables,loop=True,op=["reshape"],opargs=[[-1]])
      
 
 print(ciTester.hashes_dict_python)
 print(ciTester.hashes_dict_rust)
+key_map_rust_to_py={"read_variable_raw":"read_variable"}
+for file in ciTester.hashes_dict_rust.keys():
+    print(f"------{file}------")
+    for key in ciTester.hashes_dict_rust[file].keys():
+        py_dict=ciTester.hashes_dict_python[file][key_map_rust_to_py[key]]
+        rust_dict=ciTester.hashes_dict_rust[file][key]
+        for argcall in rust_dict.keys():
+            if rust_dict[argcall][0]!=py_dict[argcall][0]:
+                print(rust_dict[argcall][0],py_dict[argcall][0])
+                print("Not match")
+            else:
+                print("debug")
 
+    
 
