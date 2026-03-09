@@ -39,7 +39,7 @@ class Tester:
         else:
             print("None set, give valid backend")
 
-    def hash(self,func,args,op=None,opargs=None,both=False,loop=False,flatten=True,sort=True):
+    def hash(self,func,args,op=None,opargs=None,both=False,loop=False,flatten=True,sort=False):
             
 
         def update(vlsvobj,op,opargs,args,loop=False):
@@ -175,14 +175,18 @@ for file in files:
     ciTester.setHashTarget("rust")
     #ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]],sort=False,flatten=False)
     variables_to_test=["CellID","vg_rhom","vg_v","vg_rhoq","proton/vg_rho","proton/vg_v"] #fg_variable read issue with read_variable
+    variables_to_test_nonraw=["fg_b","fg_v"]
     pylist=ciTester.vlsvobj_python.get_variables()
     rustlist=ciTester.vlsvobj_rust.list_variables()
-    variables=[[var] for var in variables_to_test if (var in pylist and var in rustlist)]
-    ciTester.hash("read_variable_raw",variables,loop=True,op=["reshape"],opargs=[[-1]])
+    variables=[[var] for var in variables_to_test if (var in pylist and var in rustlist)] 
+    nonraw_vars=[[var,0] for var in variables_to_test_nonraw if (var in pylist and var in rustlist)] 
+    ciTester.hash("read_variable_raw",variables,loop=True)
+    ciTester.hash("read_variable",nonraw_vars,loop=True)
 
     #Make hash python
     ciTester.setHashTarget("python")
-    ciTester.hash("read_variable",variables,loop=True,op=["reshape"],opargs=[[-1]])
+    variables.extend(variables_to_test_nonraw)
+    ciTester.hash("read_variable",variables,loop=True)
      
 
 print(ciTester.hashes_dict_python)
