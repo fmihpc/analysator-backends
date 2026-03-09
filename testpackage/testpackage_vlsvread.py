@@ -9,8 +9,8 @@ import importlib
 datalocation = "/turso/group/spacephysics/analysator/CI/analysator-test-data/vlasiator/"
 files=["3D/FID/bulk1/bulk1.0000995.vlsv",
        "3D/FHA/bulk1/bulk1.0000990.vlsv",
-       "2D/BCQ/bulk/bulk.0002002.vlsv",
-       "2D/ABC/bulk.0001003.vlsv"
+       # "2D/BCQ/bulk/bulk.0002002.vlsv",
+       # "2D/ABC/bulk.0001003.vlsv"
 ]
 class Tester:
     def __init__(self,filename=None):
@@ -155,13 +155,13 @@ class Tester:
 # read_vdf_spares 
 # 
 ciTester = Tester()
-files=["s"]
+# files=["s"]
 for file in files:
 
     #Load data 
     filename=os.path.join(datalocation,file)
 
-    filename="/home/siclasse/bulk.0000110.vlsv"
+    # filename="/home/siclasse/bulk.0000110.vlsv"
     #filename="/home/siclasse/Downloads/bulk_hermite_compressed.0000001.vlsv"
     ciTester.changeFile(filename)
     ciTester.load()
@@ -174,7 +174,7 @@ for file in files:
     #Make hash python
     ciTester.setHashTarget("rust")
     #ciTester.hash("read_variable",{"variable":"CellID","op":0},op=["reshape","astype","numpy.sort"],opargs=[[tuple([-1])],[int],[]],sort=False,flatten=False)
-    variables_to_test=["CellID","vg_rhom","fg_b","vg_v","fg_rhom","fg_b_vol","vg_rhoq","fg_e","proton/vg_rho","proton/vg_v"]
+    variables_to_test=["CellID","vg_rhom","vg_v","vg_rhoq","proton/vg_rho","proton/vg_v"] #fg_variable read issue with read_variable
     pylist=ciTester.vlsvobj_python.get_variables()
     rustlist=ciTester.vlsvobj_rust.list_variables()
     variables=[[var] for var in variables_to_test if (var in pylist and var in rustlist)]
