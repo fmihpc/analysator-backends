@@ -9,8 +9,6 @@ import importlib
 datalocation = "/turso/group/spacephysics/analysator/CI/analysator-test-data/vlasiator/"
 files=["3D/FID/bulk1/bulk1.0000995.vlsv",
        "3D/FHA/bulk1/bulk1.0000990.vlsv",
-       # "2D/BCQ/bulk/bulk.0002002.vlsv",
-       # "2D/ABC/bulk.0001003.vlsv"
 ]
 class Tester:
     def __init__(self,filename=None):
@@ -41,22 +39,18 @@ class Tester:
 
     def hash(self,func,args,op=None,opargs=None,both=False,loop=False,flatten=True,sort=False):
             
-
-        def update(vlsvobj,op,opargs,args,loop=False):
-            
-
+        def update(vlsvobj,op,opargs,args,hashdict,loop=False):
             #If we want to repeat same function func with different arguments
             if loop:
                 for arg in args:
                     print(arg,args)
-                    update(vlsvobj,op,opargs,arg)
+                    update(vlsvobj,op,opargs,arg,hashdict)
                 return 0
             argkey=str(args)
             opsname="_"+str(op)+"_"+str(opargs)
             #Get the method of the vlsvobj that matches the given func str
             t=getattr(vlsvobj,func)
             #Handle arguments and call the function with the given args to get return value
-            print(type(args),args)
             if type(args) is dict:
                 retval=t(**args)
             elif type(args) is list:
@@ -96,28 +90,35 @@ class Tester:
                 retval.reshape((-1,))
             if sort:
                 retval.sort()
-            print(retval)
-            print(retval.shape)
-            print("end")
-
-            if self.vlsvobj==self.vlsvobj_rust:
-                if self.filename not in self.hashes_dict_rust.keys():
-                    self.hashes_dict_rust[self.filename]={}
-                    if func not in self.hashes_dict_rust:
-                        self.hashes_dict_rust[self.filename][func]={}
-                self.hashes_dict_rust[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
-            else:
-                if self.filename not in self.hashes_dict_python.keys():
-                    self.hashes_dict_python[self.filename]={}
-                    if func not in self.hashes_dict_python:
-                        self.hashes_dict_python[self.filename][func]={}
-                self.hashes_dict_python[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
-        
+            # print(retval)
+            # print(retval.shape)
+            # print("end")
+            if self.filename not in hashdict.keys():
+                hashdict[self.filename]={}
+                if func not in hashdict:
+                    hashdict[self.filename][func]={}
+            hashdict[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
+            # if vlsvobj==self.vlsvobj_rust:
+            #     if self.filename not in self.hashes_dict_rust.keys():
+            #         self.hashes_dict_rust[self.filename]={}
+            #         if func not in self.hashes_dict_rust:
+            #             self.hashes_dict_rust[self.filename][func]={}
+            #     self.hashes_dict_rust[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
+            # elif vlsvobj==self.vlsvobj_python:
+            #     if self.filename not in self.hashes_dict_python.keys():
+            #         self.hashes_dict_python[self.filename]={}
+            #         if func not in self.hashes_dict_python:
+            #             self.hashes_dict_python[self.filename][func]={}
+            #     self.hashes_dict_python[self.filename][func][argkey]=[hashlib.sha256(retval.tobytes()).hexdigest(),opsname]
         if not both:
-            update(self.vlsvobj,op,opargs,args,loop)
+            if self.vlsvobj==self.vlsvobj_python:
+                hashdict=self.hashes_dict_python
+            elif self.vlsvobj==self.vlsvobj_rust:
+                hashdict=self.hashes_dict_rust
+            update(self.vlsvobj,op,opargs,args,hashdict,loop)
         else:
-            update(self.vlsvobj_rust,op,opargs,args,loop)
-            update(self.vlsvobj_python,op,opargs,args,loop)
+            update(self.vlsvobj_rust,op,opargs,args,self.hashes_dict_rust,loop)
+            update(self.vlsvobj_python,op,opargs,args,self.hashes_dict_python,loop)
 
     def compare(self,funcpy,argspy,funcrust,argsrust):
         try:
@@ -170,7 +171,7 @@ for file in files:
 
     #Test compare
     cid=ciTester.vlsvobj_python.get_cellid_with_vdf(np.array([0,0,0]))
-    #ciTester.compare("read_velocity_cells",{"cellid":cid,"pop":"proton"},"read_vdf_sparse",{"cid":cid,"pop":"proton"})
+    ciTester.compare("read_velocity_cells",{"cellid":cid,"pop":"proton"},"read_vdf_sparse",{"cid":cid,"pop":"proton"})
     
     
     #Make hash python
@@ -193,7 +194,7 @@ for file in files:
 
 print(ciTester.hashes_dict_python)
 print(ciTester.hashes_dict_rust)
-key_map_rust_to_py={"read_variable_raw":"read_variable"}
+key_map_rust_to_py={"read_variable_raw":"read_variable","read_variable":"read_variable"}
 for file in ciTester.hashes_dict_rust.keys():
     print(f"------{file}------")
     for key in ciTester.hashes_dict_rust[file].keys():
@@ -204,7 +205,7 @@ for file in ciTester.hashes_dict_rust.keys():
                 print(rust_dict[argcall][0],py_dict[argcall][0])
                 print("Not match")
             else:
-                print("debug")
+                print("debug", argcall, rust_dict[argcall][0])
 
     
 
