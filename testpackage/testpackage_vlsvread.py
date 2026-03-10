@@ -48,6 +48,7 @@ class Tester:
             #If we want to repeat same function func with different arguments
             if loop:
                 for arg in args:
+                    print(arg,args)
                     update(vlsvobj,op,opargs,arg)
                 return 0
             argkey=str(args)
@@ -55,12 +56,13 @@ class Tester:
             #Get the method of the vlsvobj that matches the given func str
             t=getattr(vlsvobj,func)
             #Handle arguments and call the function with the given args to get return value
-            
+            print(type(args),args)
             if type(args) is dict:
                 retval=t(**args)
             elif type(args) is list:
                 retval=t(*args)
-
+            else: 
+                raise IOError(f"Wrong args type: {type(args)} {args}")
             #If we want to do operations on the retval for example reshaping, type chaning or sorting
             if op and opargs:
                 #Make into list for handling
@@ -185,7 +187,7 @@ for file in files:
 
     #Make hash python
     ciTester.setHashTarget("python")
-    variables.extend(variables_to_test_nonraw)
+    variables.extend([[var[0]] for var in nonraw_vars]) #prob some prettier way than looping through it all but it's not a big list
     ciTester.hash("read_variable",variables,loop=True)
      
 
